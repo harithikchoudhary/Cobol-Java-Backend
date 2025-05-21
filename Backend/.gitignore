@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.vs/
+*.sublime-workspace
+*.sublime-project
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Operating System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Project specific
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Sensitive/secret files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*secret*
+*credential*
+config.json
+
+# Azure specific
+*azure*.json
+*azure*.config
+*azurecreds*

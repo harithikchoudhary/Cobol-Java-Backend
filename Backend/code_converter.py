@@ -49,7 +49,7 @@ class CodeConverter:
     
 
     def chunk_code(self, source_code: str, source_language: str, 
-                chunk_size: int = 23500, chunk_overlap: int = 1000) -> List[str]:
+                chunk_size: int = 12000, chunk_overlap: int = 1000) -> List[str]:
         """
         Split source code into manageable chunks using LangChain text splitters.
         
@@ -463,31 +463,57 @@ class CodeConverter:
                 "patterns": []
             }
     
+def _convert_single_chunk(self, code_chunk: str, source_language: str,
+                         target_language: str,vsam_definition: str, business_requirements: str,
+                         technical_requirements: str, db_setup_template: str,
+                         additional_context: str = "") -> Dict[str, Any]:
+    """
+    Convert a single code chunk with enhanced COBOL-specific instructions.
     
-
-
-    def _convert_single_chunk(self, code_chunk: str, source_language: str,
-                            target_language: str,vsam_definition: str, business_requirements: str,
-                            technical_requirements: str, db_setup_template: str,
-                            additional_context: str = "") -> Dict[str, Any]:
-        """
-        Convert a single code chunk with enhanced COBOL-specific instructions.
+    Args:
+        code_chunk: The code chunk to convert
+        source_language: Source programming language
+        target_language: Target programming language
+        business_requirements: Business requirements
+        technical_requirements: Technical requirements
+        db_setup_template: Database setup template
+        additional_context: Additional context for the model
         
-        Args:
-            code_chunk: The code chunk to convert
-            source_language: Source programming language
-            target_language: Target programming language
-            business_requirements: Business requirements
-            technical_requirements: Technical requirements
-            db_setup_template: Database setup template
-            additional_context: Additional context for the model
-            
-        Returns:
-            Dictionary with conversion results
-        """
+    Returns:
+        Dictionary with conversion results
+    """
+    
+    # Create appropriate prompt based on target language
+    if target_language.lower() == "java":
+        # Import the Java-specific prompt function
+        from java_code_converter import create_java_code_conversion_prompt
+        prompt = create_java_code_conversion_prompt(
+            source_language=source_language,
+            source_code=code_chunk,
+            business_requirements=business_requirements,
+            technical_requirements=technical_requirements,
+            db_setup_template=db_setup_template,
+            vsam_definition=vsam_definition
+        )
+        framework_info = "Spring Boot framework"
+        
+    elif target_language.lower() in ["c#", "csharp"]:
+        # Import the C#-specific prompt function
+        from csharp_code_converter import create_csharp_code_conversion_prompt
+        prompt = create_csharp_code_conversion_prompt(
+            source_language=source_language,
+            source_code=code_chunk,
+            business_requirements=business_requirements,
+            technical_requirements=technical_requirements,
+            db_setup_template=db_setup_template,
+            vsam_definition=vsam_definition
+        )
+        framework_info = ".NET Core/ASP.NET Core framework"
+        
+    else:
+        # Fallback to generic conversion for other languages
         from prompts import create_code_conversion_prompt
         
-        # Create prompt for this chunk
         prompt = create_code_conversion_prompt(
             source_language,
             target_language,
@@ -497,182 +523,186 @@ class CodeConverter:
             technical_requirements,
             db_setup_template
         )
+        framework_info = f"{target_language} best practices"
+    
+    # Add COBOL-specific instructions for Java/C# conversion
+    if source_language == "COBOL" and target_language in ["Java", "C#"]:
+        prompt += """
         
-        # Add COBOL-specific instructions for Java/C# conversion
-        if source_language == "COBOL" and target_language in ["Java", "C#"]:
-            prompt += """
-            
-            CRITICAL INSTRUCTIONS FOR COBOL TO JAVA/C# CONVERSION:
-            
-            1. DATA STRUCTURE MAPPING:
-            - Convert COBOL records (01 level items) to classes
-            - Map COBOL group items (05-49 level) to nested classes or complex properties
-            - Map elementary items (PIC clauses) to appropriate data types:
-                * PIC 9(n) -> int, long, or BigInteger depending on size
-                * PIC 9(n)V9(m) -> double or BigDecimal (use BigDecimal for financial calculations)
-                * PIC X(n) -> String (with proper length)
-                * PIC A(n) -> String (with proper length)
-                * COMP-3 fields -> appropriate numeric type with scaling
-            - Handle REDEFINES with appropriate conversion strategy (e.g., inheritance or multiple properties)
-            - Convert COBOL tables (OCCURS clause) to arrays or Collections
-            
-            2. PROCEDURE CONVERSION:
-            - Convert COBOL paragraphs to methods
-            - Convert PERFORM statements to method calls
-            - Replace GOTO statements with structured alternatives (loops, conditionals)
-            - Convert in-line PERFORM with appropriate loop structure
-            - Handle COBOL specific control flow (EVALUATE, etc.)
-            
-            3. FILE HANDLING CONVERSION:
-            - Convert COBOL file operations (OPEN, READ, WRITE) to appropriate Java/C# I/O
-            - For indexed files, use appropriate database or file-based index solution
-            - For sequential files, use appropriate stream-based I/O
-            - Handle record locking mechanisms appropriately
-            
-            4. ERROR HANDLING:
-            - Convert COBOL ON SIZE ERROR to appropriate exception handling
-            - Convert FILE STATUS checks to try-catch blocks
-            - Implement appropriate logging and error reporting
-            
-            5. NUMERIC PROCESSING:
-            - Preserve exact decimal calculations where needed (BigDecimal in Java, decimal in C#)
-            - Handle implicit decimal points from COBOL PIC clauses
-            - Preserve COBOL numeric editing behavior when formatting output
-            
-            6. COMPLETENESS AND STRUCTURE:
-            - Ensure all variables are properly initialized
-            - Add appropriate constructors to classes
-            - Implement appropriate access modifiers (public, private, etc.)
-            - Add appropriate getters and setters for class properties
-            - Add appropriate package/namespace organization
-            """
+        CRITICAL INSTRUCTIONS FOR COBOL TO JAVA/C# CONVERSION:
         
-        # Enhanced instructions for Java/C# conversion
-        if target_language in ["Java", "C#"]:
-            prompt += """
-            
-            CRITICAL INSTRUCTIONS FOR CLEAN CODE GENERATION:
-            
-            1. COMPLETE ALL CODE BLOCKS - Never leave any block incomplete
-            - Every opening brace must have a closing brace
-            - Every if/for/while must have a complete body
-            - Every try must have catch and finally blocks
-            - Every method must have a return type and complete implementation
-            
-            2. EXCEPTION HANDLING - Implement proper exception handling
-            - All catch blocks must have actual code handling the exception
-            - Don't leave catch blocks empty or with placeholder comments
-            - Use try-with-resources where appropriate
-            - Add specific exception types when possible
-            
-            3. DATABASE CODE - Ensure proper connection management
-            - Always close connections, statements, and result sets in finally blocks
-            - Use try-with-resources for database resources
-            - Implement proper transaction management
-            
-            4. METHOD SIGNATURES - Use complete and proper method signatures
-            - Include all method modifiers (public/private/static/etc.)
-            - Specify return types for all methods
-            - Include parameter types for all parameters
-            - Add throws declarations when needed
-            
-            5. CLASS STRUCTURE - Make sure classes are properly formatted
-            - Include all necessary imports at the top
-            - Declare all fields with proper access modifiers
-            - Include necessary constructors
-            - Implement interfaces and extend classes as needed
-            
-            6. AVOID DUPLICATIONS - Avoid duplicating code unnecessarily
-            
-            7. COMPLETENESS - Make sure the generated code is complete and runnable
-            - No undefined variables or methods
-            - No placeholder comments where code should be
-            """
+        1. DATA STRUCTURE MAPPING:
+        - Convert COBOL records (01 level items) to classes
+        - Map COBOL group items (05-49 level) to nested classes or complex properties
+        - Map elementary items (PIC clauses) to appropriate data types:
+            * PIC 9(n) -> int, long, or BigInteger depending on size
+            * PIC 9(n)V9(m) -> double or BigDecimal (use BigDecimal for financial calculations)
+            * PIC X(n) -> String (with proper length)
+            * PIC A(n) -> String (with proper length)
+            * COMP-3 fields -> appropriate numeric type with scaling
+        - Handle REDEFINES with appropriate conversion strategy (e.g., inheritance or multiple properties)
+        - Convert COBOL tables (OCCURS clause) to arrays or Collections
         
-        # Add chunk-specific context if provided
-        if additional_context:
-            prompt += f"\n\n{additional_context}"
+        2. PROCEDURE CONVERSION:
+        - Convert COBOL paragraphs to methods
+        - Convert PERFORM statements to method calls
+        - Replace GOTO statements with structured alternatives (loops, conditionals)
+        - Convert in-line PERFORM with appropriate loop structure
+        - Handle COBOL specific control flow (EVALUATE, etc.)
         
+        3. FILE HANDLING CONVERSION:
+        - Convert COBOL file operations (OPEN, READ, WRITE) to appropriate Java/C# I/O
+        - For indexed files, use appropriate database or file-based index solution
+        - For sequential files, use appropriate stream-based I/O
+        - Handle record locking mechanisms appropriately
+        
+        4. ERROR HANDLING:
+        - Convert COBOL ON SIZE ERROR to appropriate exception handling
+        - Convert FILE STATUS checks to try-catch blocks
+        - Implement appropriate logging and error reporting
+        
+        5. NUMERIC PROCESSING:
+        - Preserve exact decimal calculations where needed (BigDecimal in Java, decimal in C#)
+        - Handle implicit decimal points from COBOL PIC clauses
+        - Preserve COBOL numeric editing behavior when formatting output
+        
+        6. COMPLETENESS AND STRUCTURE:
+        - Ensure all variables are properly initialized
+        - Add appropriate constructors to classes
+        - Implement appropriate access modifiers (public, private, etc.)
+        - Add appropriate getters and setters for class properties
+        - Add appropriate package/namespace organization
+        """
+    
+    # Enhanced instructions for Java/C# conversion
+    if target_language in ["Java", "C#"]:
+        prompt += """
+        
+        CRITICAL INSTRUCTIONS FOR CLEAN CODE GENERATION:
+        
+        1. COMPLETE ALL CODE BLOCKS - Never leave any block incomplete
+        - Every opening brace must have a closing brace
+        - Every if/for/while must have a complete body
+        - Every try must have catch and finally blocks
+        - Every method must have a return type and complete implementation
+        
+        2. EXCEPTION HANDLING - Implement proper exception handling
+        - All catch blocks must have actual code handling the exception
+        - Don't leave catch blocks empty or with placeholder comments
+        - Use try-with-resources where appropriate
+        - Add specific exception types when possible
+        
+        3. DATABASE CODE - Ensure proper connection management
+        - Always close connections, statements, and result sets in finally blocks
+        - Use try-with-resources for database resources
+        - Implement proper transaction management
+        
+        4. METHOD SIGNATURES - Use complete and proper method signatures
+        - Include all method modifiers (public/private/static/etc.)
+        - Specify return types for all methods
+        - Include parameter types for all parameters
+        - Add throws declarations when needed
+        
+        5. CLASS STRUCTURE - Make sure classes are properly formatted
+        - Include all necessary imports at the top
+        - Declare all fields with proper access modifiers
+        - Include necessary constructors
+        - Implement interfaces and extend classes as needed
+        
+        6. AVOID DUPLICATIONS - Avoid duplicating code unnecessarily
+        
+        7. COMPLETENESS - Make sure the generated code is complete and runnable
+        - No undefined variables or methods
+        - No placeholder comments where code should be
+        """
+    
+    # Add special instruction about database code
+    prompt += f"\n\nIMPORTANT: Only include database initialization code if the source {source_language} code contains database or SQL operations. If the code is a simple algorithm (like sorting, calculation, etc.) without any database interaction, do NOT include any database setup code in the converted {target_language} code."
+    
+    # Add chunk-specific context if provided
+    if additional_context:
+        prompt += f"\n\n{additional_context}"
+    
 
+    try:
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"You are an expert code converter specializing in {source_language} to {target_language} migration using {framework_info}. "
+                            f"You convert legacy code to modern, idiomatic code while maintaining all business logic. "
+                            f"Your code must be complete, well-structured, and follow best practices. "
+                            f"Ensure that all syntax is correct, with matching brackets and proper statement terminations. "
+                            f"Only include database setup/initialization if the original code uses databases or SQL. "
+                            f"For simple algorithms or calculations without database operations, don't add any database code. "
+                            f"Return your response in JSON format always with the following structure:\n"
+                            f"{{\n"
+                            f'  \"convertedCode\": \"The complete converted code here\",\n'
+                            f'  \"conversionNotes\": \"Notes about the conversion process\",\n'
+                            f'  \"potentialIssues\": [\"List of any potential issues or limitations\"],\n'
+                            f'  \"databaseUsed\": true/false\n'
+                            f"}}"
+                },
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            max_tokens=4000,
+            response_format={"type": "json_object"}
+        )
+        
+        # Parse the JSON response
+        conversion_content = response.choices[0].message.content.strip()
+        
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"You are an expert code converter specializing in {source_language} to {target_language} migration. "
-                                f"You convert legacy code to modern, idiomatic code while maintaining all business logic. "
-                                f"Your code must be complete, well-structured, and follow best practices. "
-                                f"Ensure that all syntax is correct, with matching brackets and proper statement terminations. "
-                                f"Only include database setup/initialization if the original code uses databases or SQL. "
-                                f"For simple algorithms or calculations without database operations, don't add any database code. "
-                                f"Return your response in JSON format always with the following structure:\n"
-                                f"{{\n"
-                                f'  \"convertedCode\": \"The complete converted code here\",\n'
-                                f'  \"conversionNotes\": \"Notes about the conversion process\",\n'
-                                f'  \"potentialIssues\": [\"List of any potential issues or limitations\"],\n'
-                                f'  \"databaseUsed\": true/false\n'
-                                f"}}"
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=4000,
-                response_format={"type": "json_object"}
-            )
+            # Attempt to parse the JSON response
+            conversion_json = json.loads(conversion_content)
             
-            # Parse the JSON response
-            conversion_content = response.choices[0].message.content.strip()
+            # Validate the converted code
+            if target_language in ["Java", "C#"]:
+                self._validate_code(conversion_json, target_language)
+                
+            return conversion_json
             
+        except json.JSONDecodeError as json_err:
+            logger.error(f"Error parsing JSON response: {str(json_err)}")
+            logger.debug(f"Problematic response content: {conversion_content}")
+            
+            # Attempt to extract JSON from the response
             try:
-                # Attempt to parse the JSON response
-                conversion_json = json.loads(conversion_content)
-                
-                # Validate the converted code
-                if target_language in ["Java", "C#"]:
-                    self._validate_code(conversion_json, target_language)
+                # Use regex to find JSON-like content
+                json_pattern = r'(\{[\s\S]*\})'
+                match = re.search(json_pattern, conversion_content)
+                if match:
+                    potential_json = match.group(1)
+                    conversion_json = json.loads(potential_json)
+                    logger.info("Successfully extracted JSON from response using regex")
                     
-                return conversion_json
-                
-            except json.JSONDecodeError as json_err:
-                logger.error(f"Error parsing JSON response: {str(json_err)}")
-                logger.debug(f"Problematic response content: {conversion_content}")
-                
-                # Attempt to extract JSON from the response
-                try:
-                    # Use regex to find JSON-like content
-                    json_pattern = r'(\{[\s\S]*\})'
-                    match = re.search(json_pattern, conversion_content)
-                    if match:
-                        potential_json = match.group(1)
-                        conversion_json = json.loads(potential_json)
-                        logger.info("Successfully extracted JSON from response using regex")
+                    # Validate the converted code
+                    if target_language in ["Java", "C#"]:
+                        self._validate_code(conversion_json, target_language)
                         
-                        # Validate the converted code
-                        if target_language in ["Java", "C#"]:
-                            self._validate_code(conversion_json, target_language)
-                            
-                        return conversion_json
-                except Exception as extract_err:
-                    logger.error(f"Failed to extract JSON using regex: {str(extract_err)}")
-                
-                # Return a fallback response
-                return {
-                    "convertedCode": "// Error: Invalid response format received from server",
-                    "conversionNotes": f"Error processing response: {str(json_err)}",
-                    "potentialIssues": ["Failed to process model response", "Response was not valid JSON"],
-                    "databaseUsed": False
-                }
-                
-        except Exception as e:
-            logger.error(f"Error calling model API: {str(e)}")
+                    return conversion_json
+            except Exception as extract_err:
+                logger.error(f"Failed to extract JSON using regex: {str(extract_err)}")
+            
+            # Return a fallback response
             return {
-                "convertedCode": "",
-                "conversionNotes": f"Error calling model API: {str(e)}",
-                "potentialIssues": ["Failed to get response from model"],
+                "convertedCode": "// Error: Invalid response format received from server",
+                "conversionNotes": f"Error processing response: {str(json_err)}",
+                "potentialIssues": ["Failed to process model response", "Response was not valid JSON"],
                 "databaseUsed": False
             }
-    
+            
+    except Exception as e:
+        logger.error(f"Error calling model API: {str(e)}")
+        return {
+            "convertedCode": "",
+            "conversionNotes": f"Error calling model API: {str(e)}",
+            "potentialIssues": ["Failed to get response from model"],
+            "databaseUsed": False
+        }
+
 
     def _validate_code(self, conversion_result: Dict[str, Any], target_language: str) -> None:
         """

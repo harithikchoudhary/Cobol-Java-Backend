@@ -13,7 +13,8 @@ from db_templates import get_db_template
 from prompts import (
     create_business_requirements_prompt,
     create_technical_requirements_prompt,
-    create_code_conversion_prompt,
+    create_csharp_code_conversion_prompt,
+    create_java_code_conversion_prompt,
     create_unit_test_prompt,
     create_functional_test_prompt
 )
@@ -322,7 +323,6 @@ def convert_code():
             "functionalTests": {},
             "sourceLanguage": source_language if source_language else "",
             "targetLanguage": target_language if target_language else "",
-
             "databaseUsed": False
         }), 400
 
@@ -352,16 +352,16 @@ def convert_code():
             code_chunks = converter.chunk_code(
                 source_code=source_code,
                 source_language=source_language,
-                chunk_size=23500,  # Adjust as needed based on model capabilities
-                chunk_overlap=2000  # Ensure context overlap between chunks
+                chunk_size=12000,  # Adjust as needed based on model capabilities
+                chunk_overlap=1000  # Ensure context overlap between chunks
             )
             
-            # Convert the chunked code
+            # Convert the chunked code using appropriate prompt function
             conversion_json = converter.convert_code_chunks(
                 chunks=code_chunks,
                 source_language=source_language,
                 target_language=target_language,
-                vsam_definition = vsam_definition,
+                vsam_definition=vsam_definition,
                 business_requirements=business_requirements,
                 technical_requirements=technical_requirements,
                 db_setup_template=db_setup_template
@@ -369,16 +369,45 @@ def convert_code():
         else:
             logger.info(f"Source code is small enough ({len(source_code)} chars) for direct conversion.")
             
-            # Create a prompt for the Azure OpenAI model
-            prompt = create_code_conversion_prompt(
-                source_language,
-                target_language,
-                source_code,
-                vsam_definition,
-                business_requirements,
-                technical_requirements,
-                db_setup_template
-            )
+            # Create appropriate prompt based on target language
+            if target_language.lower() == "java":
+                # Import the Java-specific prompt function
+                prompt = create_java_code_conversion_prompt(
+                    source_language=source_language,
+                    source_code=source_code,
+                    business_requirements=business_requirements,
+                    technical_requirements=technical_requirements,
+                    db_setup_template=db_setup_template,
+                    vsam_definition=vsam_definition
+                )
+                framework_info = "Spring Boot framework"
+                
+            elif target_language.lower() in ["c#", "csharp"]:
+                # Import the C#-specific prompt function
+                prompt = create_csharp_code_conversion_prompt(
+                    source_language=source_language,
+                    source_code=source_code,
+                    business_requirements=business_requirements,
+                    technical_requirements=technical_requirements,
+                    db_setup_template=db_setup_template,
+                    vsam_definition=vsam_definition
+                )
+                framework_info = ".NET Core/ASP.NET Core framework"
+                
+            else:
+                # Fallback to generic conversion for other languages
+                logger.warning(f"No specific prompt function found for target language: {target_language}. Using generic conversion.")
+                from code_converter import create_code_conversion_prompt
+                prompt = create_code_conversion_prompt(
+                    source_language=source_language,
+                    target_language=target_language,
+                    source_code=source_code,
+                    business_requirements=business_requirements,
+                    technical_requirements=technical_requirements,
+                    db_setup_template=db_setup_template,
+                    vsam_definition=vsam_definition
+                )
+                framework_info = f"{target_language} best practices"
 
             # Add special instruction about database code
             prompt += f"\n\nIMPORTANT: Only include database initialization code if the source {source_language} code contains database or SQL operations. If the code is a simple algorithm (like sorting, calculation, etc.) without any database interaction, do NOT include any database setup code in the converted {target_language} code."
@@ -389,10 +418,11 @@ def convert_code():
                 messages=[
                     {
                         "role": "system",
-                        "content": f"You are an expert code converter assistant specializing in {source_language} to {target_language} migration. "
+                        "content": f"You are an expert code converter assistant specializing in {source_language} to {target_language} migration using {framework_info}. "
                                   f"You convert legacy code to modern, idiomatic code while maintaining all business logic. "
                                   f"Only include database setup/initialization if the original code uses databases or SQL. "
                                   f"For simple algorithms or calculations without database operations, don't add any database code. "
+                                  f"Follow the layered architecture structure specified in the prompt. "
                                   f"Return your response in JSON format always with the following structure:\n"
                                   f"{{\n"
                                   f'  "convertedCode": "The complete converted code here",\n'
@@ -435,13 +465,22 @@ def convert_code():
             technical_requirements
         )
         
+        # Update system message for unit tests based on target language
+        if target_language.lower() == "java":
+            test_framework_info = "JUnit 5 and Mockito for Spring Boot applications"
+        elif target_language.lower() in ["c#", "csharp"]:
+            test_framework_info = "xUnit, NUnit, or MSTest for .NET Core applications"
+        else:
+            test_framework_info = f"appropriate testing frameworks for {target_language}"
+        
         unit_test_response = client.chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT_NAME,
             messages=[
                 {
                     "role": "system",
-                    "content": f"You are an expert test engineer specializing in writing unit tests for {target_language}. "
+                    "content": f"You are an expert test engineer specializing in writing unit tests for {target_language} using {test_framework_info}. "
                               f"You create comprehensive unit tests that verify all business logic and edge cases. "
+                              f"Follow the testing best practices for the target framework. "
                               f"Return your response in JSON format with the following structure:\n"
                               f"{{\n"
                               f'  "unitTestCode": "The complete unit test code here",\n'
@@ -468,7 +507,7 @@ def convert_code():
             logger.warning("Failed to parse unit test JSON directly")
             unit_test_json = extract_json_from_response(unit_test_content)
         
-        unit_test_code_raw= unit_test_json.get("unitTestCode", "")
+        unit_test_code_raw = unit_test_json.get("unitTestCode", "")
         unit_test_code = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", unit_test_code_raw.strip())
         
         # Generate functional test cases based on business requirements
@@ -478,12 +517,20 @@ def convert_code():
             business_requirements
         )
         
+        # Update system message for functional tests based on target language
+        if target_language.lower() == "java":
+            functional_test_info = "Spring Boot Test, TestContainers, and REST Assured"
+        elif target_language.lower() in ["c#", "csharp"]:
+            functional_test_info = "ASP.NET Core TestHost, WebApplicationFactory, and integration testing"
+        else:
+            functional_test_info = f"appropriate integration testing frameworks for {target_language}"
+        
         functional_test_response = client.chat.completions.create(
             model=AZURE_OPENAI_DEPLOYMENT_NAME,
             messages=[
                 {
                     "role": "system",
-                    "content": f"You are an expert QA engineer specializing in creating functional tests for {target_language} applications. "
+                    "content": f"You are an expert QA engineer specializing in creating functional tests for {target_language} applications using {functional_test_info}. "
                               f"You create comprehensive test scenarios that verify the application meets all business requirements. "
                               f"Focus on user journey tests and acceptance criteria. "
                               f"Return your response in JSON format with the following structure:\n"
@@ -543,7 +590,7 @@ def convert_code():
             "targetLanguage": target_language if 'target_language' in locals() else "",
             "databaseUsed": False
         }), 500
-
+    
 
 @app.route("/api/languages", methods=["GET"])
 def get_languages():
